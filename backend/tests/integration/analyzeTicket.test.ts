@@ -20,7 +20,7 @@
  *  - Rate limiting (per IP)
  */
 
-import { POST as analyzePOST } from '@/app/api/analyze-ticket/route';
+import { POST as analyzePOST } from '@/app/analyze-ticket/route';
 import { ITicketResponse } from '@/interfaces/ITicketResponse';
 import {
   CaseType,
@@ -44,7 +44,7 @@ jest.mock('@/services/auditService', () => ({
 
 // Helper: build a NextRequest-compatible Request for the route.
 function makeRouteRequest(body: unknown, contentType = 'application/json'): Request {
-  return new Request('http://localhost:8000/api/analyze-ticket', {
+  return new Request('http://localhost:8000/analyze-ticket', {
     method: 'POST',
     headers: { 'content-type': contentType },
     body: typeof body === 'string' ? body : JSON.stringify(body),
@@ -636,7 +636,7 @@ describe('POST /analyze-ticket — full route handler', () => {
   // ========================================================================
   describe('Error handling and edge cases', () => {
     it('returns 400 for malformed JSON', async () => {
-      const req = new Request('http://localhost:8000/api/analyze-ticket', {
+      const req = new Request('http://localhost:8000/analyze-ticket', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{not valid json',
@@ -649,7 +649,7 @@ describe('POST /analyze-ticket — full route handler', () => {
     });
 
     it('returns 400 for empty request body', async () => {
-      const req = new Request('http://localhost:8000/api/analyze-ticket', {
+      const req = new Request('http://localhost:8000/analyze-ticket', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '',
@@ -659,7 +659,7 @@ describe('POST /analyze-ticket — full route handler', () => {
     });
 
     it('returns 400 when Content-Type is wrong', async () => {
-      const req = new Request('http://localhost:8000/api/analyze-ticket', {
+      const req = new Request('http://localhost:8000/analyze-ticket', {
         method: 'POST',
         headers: { 'content-type': 'text/plain' },
         body: 'hello',
@@ -879,7 +879,7 @@ describe('POST /analyze-ticket — full route handler', () => {
     });
 
     it('echoes a client-supplied request ID when provided', async () => {
-      const req = new Request('http://localhost:8000/api/analyze-ticket', {
+      const req = new Request('http://localhost:8000/analyze-ticket', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -964,12 +964,12 @@ describe('POST /analyze-ticket — full route handler', () => {
   // ========================================================================
   describe('Route module shape', () => {
     it('exports a POST function', () => {
-      const mod = require('@/app/api/analyze-ticket/route');
+      const mod = require('@/app/analyze-ticket/route');
       expect(typeof mod.POST).toBe('function');
     });
 
     it('marks the route as dynamic / nodejs runtime', () => {
-      const mod = require('@/app/api/analyze-ticket/route');
+      const mod = require('@/app/analyze-ticket/route');
       expect(mod.dynamic).toBe('force-dynamic');
       expect(mod.runtime).toBe('nodejs');
     });

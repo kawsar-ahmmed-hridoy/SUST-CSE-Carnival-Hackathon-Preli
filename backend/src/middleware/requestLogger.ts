@@ -22,7 +22,7 @@ declare global {
   var __requestContext: IRequestContext | undefined;
 }
 
-export function withRequestContext<T>(
+export function withRequestContext(
   request: NextRequest,
   handler: () => Promise<NextResponse>,
 ): Promise<NextResponse> {

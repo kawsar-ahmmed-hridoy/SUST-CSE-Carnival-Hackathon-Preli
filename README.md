@@ -143,7 +143,7 @@ Given a customer complaint and a short snippet of their recent transaction histo
 
 ## API contract
 
-### `POST /analyze-ticket` (and `/api/analyze-ticket`)
+### `POST /analyze-ticket`
 
 **Request body:**
 ```json
@@ -221,14 +221,11 @@ queuestorm-investigator/
 ├── backend/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── api/                 # /api/* canonical routes
-│   │   │   │   ├── analyze-ticket/
-│   │   │   │   ├── analyze-ticket-batch/
-│   │   │   │   ├── health/
-│   │   │   │   └── tickets/[ticket_id]/
-│   │   │   ├── analyze-ticket/      # top-level alias (matches PDF path)
-│   │   │   ├── analyze-ticket-batch/
-│   │   │   └── health/
+│   │   │   ├── analyze-ticket/      # POST /analyze-ticket (canonical)
+│   │   │   ├── analyze-ticket-batch/ # POST /analyze-ticket-batch
+│   │   │   ├── health/              # GET /health
+│   │   │   └── api/
+│   │   │       └── tickets/[ticket_id]/  # GET /api/tickets/:id (audit trail)
 │   │   ├── config/                  # env loader + constants
 │   │   ├── controllers/             # route → service glue
 │   │   ├── services/                # investigator + safety + audit + AI providers
@@ -382,9 +379,7 @@ npm run test:coverage
 | `GET`  | `/health`                              | public | Liveness probe |
 | `POST` | `/analyze-ticket`                      | optional | Single-ticket investigation |
 | `POST` | `/analyze-ticket-batch`                | optional | Batch (max 100 tickets) |
-| `GET`  | `/tickets/{ticket_id}?limit=N`         | optional | Audit trail (max 200) |
-
-> The `/api/...` prefix variants are also exposed so the service works behind path-based proxies.
+| `GET`  | `/api/tickets/{ticket_id}?limit=N`     | optional | Audit trail (max 200) |
 
 ---
 

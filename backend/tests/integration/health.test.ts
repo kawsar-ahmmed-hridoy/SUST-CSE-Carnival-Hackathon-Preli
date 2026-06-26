@@ -10,7 +10,7 @@
  *  - Header security defaults are set
  */
 
-import { GET as healthGET } from '@/app/api/health/route';
+import { GET as healthGET } from '@/app/health/route';
 import { healthController } from '@/controllers/ticketController';
 
 jest.mock('@/lib/mongodb', () => ({

@@ -72,12 +72,6 @@ function getEnvInt(key: string, fallback: number): number {
   return parsed;
 }
 
-function getEnvBool(key: string, fallback: boolean): boolean {
-  const raw = process.env[key];
-  if (raw === undefined || raw === '') return fallback;
-  return ['1', 'true', 'yes', 'on'].includes(raw.toLowerCase());
-}
-
 function loadConfig(): AppConfig {
   const nodeEnv = (process.env.NODE_ENV ?? 'development') as AppConfig['nodeEnv'];
   const provider = (process.env.AI_PROVIDER ?? AIProvider.PRIMARY) as AIProvider;

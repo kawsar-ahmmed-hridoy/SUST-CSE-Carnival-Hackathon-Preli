@@ -8,7 +8,7 @@
  *   - Returns success_count, failure_count, and full results array
  */
 
-import { POST as batchPOST } from '@/app/api/analyze-ticket-batch/route';
+import { POST as batchPOST } from '@/app/analyze-ticket-batch/route';
 
 jest.mock('@/lib/mongodb', () => ({
   connectMongo: jest.fn().mockResolvedValue(undefined),
@@ -21,7 +21,7 @@ jest.mock('@/services/auditService', () => ({
 }));
 
 function makeBatchRequest(tickets: unknown[]): Request {
-  return new Request('http://localhost:8000/api/analyze-ticket-batch', {
+  return new Request('http://localhost:8000/analyze-ticket-batch', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ tickets }),
@@ -103,7 +103,7 @@ describe('POST /analyze-ticket-batch', () => {
   });
 
   it('returns 400 on malformed JSON body', async () => {
-    const req = new Request('http://localhost:8000/api/analyze-ticket-batch', {
+    const req = new Request('http://localhost:8000/analyze-ticket-batch', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: 'not-json{',

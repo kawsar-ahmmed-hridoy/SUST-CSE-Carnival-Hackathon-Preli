@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install OS dependencies needed by bcrypt native build
+# Install OS dependencies needed by native module builds (mongoose, etc.)
 RUN apk add --no-cache python3 make g++ libc6-compat
 
 # Copy package manifests first to leverage Docker layer cache
@@ -31,7 +31,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public 2>/dev/null || true
 COPY --from=builder /app/src ./src
-COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder /app/next.config.mjs ./next.config.mjs
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
 USER appuser

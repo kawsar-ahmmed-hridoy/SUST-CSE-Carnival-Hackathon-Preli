@@ -25,7 +25,7 @@ describe('authenticateRequest', () => {
   });
 
   it('returns null (allow) for /health regardless of headers', () => {
-    const req = makeReq('/api/health');
+    const req = makeReq('/health');
     const result = authenticateRequest(req as unknown as import('next/server').NextRequest);
     expect(result).toBeNull();
   });
@@ -38,7 +38,7 @@ describe('authenticateRequest', () => {
     process.env.JWT_SECRET = '';
     // Note: config is loaded once at module init. The test setup forces
     // NODE_ENV=test before any imports, so the open-mode code path is taken.
-    const req = makeReq('/api/analyze-ticket');
+    const req = makeReq('/analyze-ticket');
     const result = authenticateRequest(req as unknown as import('next/server').NextRequest);
     expect(result).toBeNull();
   });
