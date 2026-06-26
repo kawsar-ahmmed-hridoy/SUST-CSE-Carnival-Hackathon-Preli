@@ -26,6 +26,9 @@ export function handleError(err: unknown): {
   if (err instanceof ZodError) {
     const details = err.errors.map((e) => ({ path: e.path.join('.'), message: e.message }));
     logger.warn({ details }, 'Zod validation failed');
+    // Per PDF: 400 = "Malformed JSON or missing required fields",
+    //          422 = "Valid schema but semantically invalid".
+    // Zod errors are predominantly missing/invalid fields → 400.
     return {
       body: errorResponse('Validation failed', 400, 'VALIDATION_FAILED', details),
       status: 400,

@@ -24,7 +24,10 @@ export class AppError extends Error {
 
 export class ValidationError extends AppError {
   constructor(message: string, details?: unknown) {
-    super(message, 422, 'VALIDATION_FAILED', details);
+    // Per PDF status codes: 400 = "Malformed JSON or missing required fields".
+    // 422 is reserved for semantically invalid input caught by the controller
+    // (e.g. whitespace-only complaint) which throws BadRequestError explicitly.
+    super(message, 400, 'VALIDATION_FAILED', details);
   }
 }
 

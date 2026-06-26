@@ -22,24 +22,24 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     const fakeRes = {
       statusCode: 200,
       headers: {} as Record<string, string>,
+      body: undefined as unknown,
       status(code: number) {
-        this.statusCode = code;
-        return this;
+        (this as { statusCode: number }).statusCode = code;
+        return this as unknown as Response;
       },
       setHeader(k: string, v: string) {
-        this.headers[k] = v;
-        return this;
+        (this as { headers: Record<string, string> }).headers[k] = v;
+        return this as unknown as Response;
       },
       getHeader(k: string) {
-        return this.headers[k];
+        return (this as { headers: Record<string, string> }).headers[k];
       },
       json(body: unknown) {
-        this.body = body;
-        return this;
+        (this as { body: unknown }).body = body;
+        return this as unknown as Response;
       },
-      body: undefined as unknown,
-      on: () => undefined,
-      once: () => undefined,
+      on: () => fakeRes,
+      once: () => fakeRes,
       emit: () => false,
     } as unknown as Response;
     const next: NextFunction = (err?: unknown) => (err ? reject(err) : resolve());

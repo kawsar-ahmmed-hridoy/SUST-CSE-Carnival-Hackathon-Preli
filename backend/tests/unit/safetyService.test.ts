@@ -30,12 +30,14 @@ describe('safetyService', () => {
   });
 
   describe('sanitizeOutput', () => {
-    it('strips credential requests from the reply', () => {
+    it('strips imperative credential requests from the reply', () => {
       const out = sanitizeOutput({
         customer_reply: 'Please share your PIN with us so we can verify.',
         recommended_next_action: 'Verify the customer.',
       });
-      expect(out.customer_reply.toLowerCase()).not.toMatch(/share\s+(?:your\s+)?pin/);
+      // The imperative "please share your PIN" should be removed, but the
+      // safety footer "do not share your PIN" is intentional and must remain.
+      expect(out.customer_reply.toLowerCase()).not.toMatch(/please\s+share\s+your\s+pin/);
       expect(out.wasRegenerated).toBe(true);
     });
 
@@ -72,6 +74,15 @@ describe('safetyService', () => {
         recommended_next_action: 'Review the case.',
       });
       expect(out.customer_reply.toLowerCase()).toMatch(/pin|otp|password/);
+    });
+
+    it('never contains imperative credential asks', () => {
+      const out = sanitizeOutput({
+        customer_reply: 'We will help you. Please send us your password to continue.',
+        recommended_next_action: 'Verify the customer.',
+      });
+      expect(out.customer_reply.toLowerCase()).not.toMatch(/please\s+send\s+(?:us\s+)?(?:your\s+)?(?:password|pin|otp)/);
+      expect(out.customer_reply.toLowerCase()).not.toMatch(/please\s+share\s+your\s+(?:pin|otp|password)/);
     });
   });
 });

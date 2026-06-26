@@ -149,10 +149,13 @@ export function sanitizeOutput(input: {
       code: ReasonCodes.SAFETY_REPLY_REGENERATED,
       message: 'Credential request detected in customer reply — sanitized.',
     });
+    // Strip sentences containing imperative credential asks.
     reply = reply.replace(
-      /\b(?:send|share|provide|enter)\s+(?:us|me|here|your|the)?\s*(?:pin|otp|password|cvv|card\s+number)\b[^.!?\n]*/gi,
+      /[^.!?\n]*\b(?:send|share|provide|enter|give|submit)\b[^.!?\n]*\b(?:pin|otp|one[-\s]?time\s+password|password|cvv|card\s+number)\b[^.!?\n]*[.!?\n]?/gi,
       '',
     );
+    // Clean up extra whitespace and dangling commas.
+    reply = reply.replace(/\s{2,}/g, ' ').replace(/^[,\s]+|[,\s]+$/g, '').trim();
     reply = ensureCredentialsFooter(reply);
     wasRegenerated = true;
   }

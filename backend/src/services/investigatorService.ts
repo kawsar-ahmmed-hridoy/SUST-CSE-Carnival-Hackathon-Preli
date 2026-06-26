@@ -119,12 +119,30 @@ function classifyCaseType(request: ITicketRequest, match: IMatchResult): CaseTyp
 
   // Wrong transfer signals.
   if (
-    /\b(wrong|incorrect|mistake|mistakenly|accidentally)\b.*\b(send|sent|transfer|transferred|number|number|recipient)\b/i.test(
-      request.complaint,
-    ) ||
-    /\b(wrong|incorrect)\s+(number|recipient|account)\b/i.test(request.complaint)
+    /\b(wrong|incorrect|mistake|mistakenly|accidentally|by\s+mistake)\b/i.test(request.complaint) &&
+    /\b(send|sent|transfer|transferred|number|recipient|account|person)\b/i.test(request.complaint)
   ) {
     return CaseType.WRONG_TRANSFER;
+  }
+  if (/\b(wrong|incorrect)\s+(number|recipient|account)\b/i.test(request.complaint)) {
+    return CaseType.WRONG_TRANSFER;
+  }
+
+  // Merchant settlement — must come before payment_failed because a complaint
+  // like "My merchant settlement was not received" contains "not received".
+  if (
+    /\b(merchant|seller|vendor)\b.*\b(settlement|payout|paid\s+me)\b/i.test(text) ||
+    /\bsettlement\s+(?:not\s+received|delay|pending)\b/i.test(text)
+  ) {
+    return CaseType.MERCHANT_SETTLEMENT_DELAY;
+  }
+
+  // Agent cash-in.
+  if (
+    /\b(agent|cash\s*in|deposit)\b/i.test(text) &&
+    /\b(didn['\s]?t\s+(?:receive|get|reflect)|not\s+(?:receive|reflect|credited)|missing|absent)\b/i.test(text)
+  ) {
+    return CaseType.AGENT_CASH_IN_ISSUE;
   }
 
   // Payment failed (balance deducted but transfer not received).
@@ -144,22 +162,6 @@ function classifyCaseType(request: ITicketRequest, match: IMatchResult): CaseTyp
   // Duplicate payment.
   if (/\b(duplicate|twice|two\s+times|charged\s+twice|double\s+(?:charge|payment))\b/i.test(text)) {
     return CaseType.DUPLICATE_PAYMENT;
-  }
-
-  // Merchant settlement.
-  if (
-    /\b(merchant|seller|vendor)\b.*\b(settlement|payout|paid\s+me)\b/i.test(text) ||
-    /\bsettlement\s+(?:not\s+received|delay|pending)\b/i.test(text)
-  ) {
-    return CaseType.MERCHANT_SETTLEMENT_DELAY;
-  }
-
-  // Agent cash-in.
-  if (
-    /\b(agent|cash\s*in|deposit)\b/i.test(text) &&
-    /\b(didn['\s]?t\s+(?:receive|get|reflect)|not\s+(?:receive|reflect|credited)|missing|absent)\b/i.test(text)
-  ) {
-    return CaseType.AGENT_CASH_IN_ISSUE;
   }
 
   // Match-driven fallback: if a transaction was matched, infer from its type/status.
