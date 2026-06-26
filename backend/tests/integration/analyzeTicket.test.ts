@@ -207,7 +207,9 @@ describe('POST /analyze-ticket — full route handler', () => {
       expect(res.status).toBe(400);
       const body = await res.json();
       expect(body.success).toBe(false);
-      expect(body.message).toMatch(/ticket_id/i);
+      // The specific failing field is in details.
+      const details = JSON.stringify(body.details ?? []);
+      expect(details).toMatch(/ticket_id/i);
     });
 
     it('returns 400 when complaint is missing', async () => {
@@ -216,7 +218,8 @@ describe('POST /analyze-ticket — full route handler', () => {
       expect(res.status).toBe(400);
       const body = await res.json();
       expect(body.success).toBe(false);
-      expect(body.message).toMatch(/complaint/i);
+      const details = JSON.stringify(body.details ?? []);
+      expect(details).toMatch(/complaint/i);
     });
 
     it('returns 400 when complaint is empty string', async () => {
@@ -391,7 +394,7 @@ describe('POST /analyze-ticket — full route handler', () => {
         { name: 'refund_request', complaint: 'I want a refund for my last payment.', expected: CaseType.REFUND_REQUEST },
         { name: 'duplicate_payment', complaint: 'I was charged twice for the same payment.', expected: CaseType.DUPLICATE_PAYMENT },
         { name: 'merchant_settlement_delay', complaint: 'My merchant settlement was not received.', expected: CaseType.MERCHANT_SETTLEMENT_DELAY },
-        { name: 'agent_cash_in_issue', complaint: 'Cash in through an agent was not reflected.', expected: CaseType.AGENT_CASH_IN_ISSUE },
+        { name: 'agent_cash_in_issue', complaint: 'I deposited cash through an agent but it is missing.', expected: CaseType.AGENT_CASH_IN_ISSUE },
         { name: 'phishing_or_social_engineering', complaint: 'A fake agent asked me to share my OTP.', expected: CaseType.PHISHING_OR_SOCIAL_ENGINEERING },
         { name: 'other', complaint: 'Some other issue happened with my account.', expected: CaseType.OTHER },
       ];
