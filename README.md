@@ -3,33 +3,55 @@
 > **bKash presents SUST CSE Carnival 2026 — Codex Community Hackathon**
 > AI / API SupportOps Challenge for Digital Finance — Online Preliminary Round
 
-A production-ready AI-powered support copilot that investigates customer complaints for digital finance platforms. It cross-references complaint text against real transaction history to produce evidence-grounded decisions, safe customer replies, and correct routing — under strict fintech safety constraints.
+An AI-powered support copilot that investigates customer complaints for digital finance platforms. Given a complaint and recent transaction history, it produces evidence-grounded classification, correct routing, safe customer replies, and a human-review flag — under strict fintech safety constraints.
 
 ---
 
-## Table of Contents
+## Hackathon Submission (organizer-facing)
 
-- [Project Overview](#project-overview)
-- [Tech Stack](#tech-stack)
-- [Features](#features)
-- [Folder Structure](#folder-structure)
-- [Installation](#installation)
-- [Environment Variables](#environment-variables)
-- [Docker](#docker)
-- [MongoDB Setup](#mongodb-setup)
-- [Running Locally](#running-locally)
-- [Production Deployment](#production-deployment)
-- [Testing](#testing)
-- [API Documentation](#api-documentation)
-- [Models](#models)
-- [Safety Logic](#safety-logic)
-- [Design Decisions](#design-decisions)
-- [Scaling Considerations](#scaling-considerations)
-- [Performance Considerations](#performance-considerations)
-- [Security Considerations](#security-considerations)
-- [Known Limitations](#known-limitations)
-- [Troubleshooting](#troubleshooting)
-- [Future Improvements](#future-improvements)
+| Field | Value |
+|---|---|
+| **Team name** | Novacore |
+| **Track** | AI / API SupportOps Challenge for Digital Finance |
+| **GitHub repository** | `https://github.com/kawsar-ahmmed-hridoy/SUST-CSE-Carnival-Hackathon-Preli` |
+| **Primary endpoint** | `POST /analyze-ticket` |
+| **Liveness endpoint** | `GET /health` |
+| **Bonus endpoint** | `POST /analyze-ticket-batch` |
+| **Audit endpoint** | `GET /tickets/{ticket_id}` |
+| **Container port** | `8000` |
+| **Container address** | `0.0.0.0:8000` |
+| **Service timeout** | ≤ 30 s per request |
+
+### Quick judge command
+
+```bash
+docker build -t queuestorm-team .
+docker run -p 8000:8000 --env-file judging.env queuestorm-team
+```
+
+Then verify with:
+
+```bash
+curl http://localhost:8000/health
+```
+
+### Datasets
+
+- `evaluation/public_dataset.json` — 7 representative tickets (reproducible by judges)
+- `evaluation/private_dataset.json` — 15 hidden tickets (our own QA set)
+- The judging harness will provide its own private Dataset C at evaluation time.
+
+### Evaluation-script command (run after `docker run`):
+
+```bash
+bash scripts/run_evaluation.sh http://localhost:8000 ./evaluation/public_dataset.json
+```
+
+### Team members
+
+| Role | Name |
+|---|---|
+| Backend / AI / DevOps | **Kawsar Ahmmed Hridoy** |
 
 ---
 
@@ -60,31 +82,29 @@ Given a customer complaint and a short snippet of their recent transaction histo
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 14 (App Router, API routes only) |
-| Language | TypeScript (strict mode) |
+| Framework | Next.js 15 (App Router, API routes only) |
+| Language | TypeScript 5.7 (strict mode) |
 | Runtime | Node.js 20 LTS |
-| Database | MongoDB 7 + Mongoose ODM |
-| Validation | Zod |
-| Authentication | JWT + Refresh Tokens + HttpOnly Cookies |
-| AI / LLM | Google Gemini 2.5 Flash (free tier, primary) → Groq Llama 3 (fallback) |
-| Security | Helmet, CORS, express-rate-limit, bcrypt |
-| Logging | Pino (structured JSON logs) |
-| Testing | Jest + Supertest |
-| Containerization | Docker + Docker Compose |
-| Linting | ESLint (next/core-web-vitals + typescript-eslint) |
-| Formatting | Prettier |
+| Database | MongoDB 7 + Mongoose 8 ODM |
+| Validation | Zod 3 |
+| Authentication | `X-Api-Key` + JWT bearer (optional) |
+| AI / LLM | Google Gemini 2.5 Flash (primary) → Groq Llama 3.3 70B (fallback) → rule-based |
+| Security | Helmet 8 + custom OWASP headers + per-IP rate limit + constant-time key comparison |
+| Logging | Pino 9 (structured JSON) with request-ID correlation |
+| Testing | Jest 29 + ts-jest + Supertest |
+| Containerization | Docker multi-stage build, non-root user |
 
 ---
 
 ## Features
 
-### Core (Mandatory)
+### Core (Mandatory endpoints)
 
-- `GET /health` — Liveness probe returning `{"status":"ok"}` within 60 seconds of service start
+- `GET /health` — Liveness probe returning `{"status":"ok"}` within 60 seconds of service start. Public, always available.
 - `POST /analyze-ticket` — Full complaint investigation endpoint:
   - Transaction matching against provided history
   - Evidence verdict determination (`consistent` / `inconsistent` / `insufficient_data`)
-  - Case type classification (8 enum values)
+  - Case type classification (8 enum values, see below)
   - Department routing (6 enum values)
   - Severity scoring (`low` / `medium` / `high` / `critical`)
   - Human review flagging
@@ -94,412 +114,38 @@ Given a customer complaint and a short snippet of their recent transaction histo
   - Recommended next action
   - Safe customer reply
 
-### Safety Guardrails
+### Bonus endpoints
 
-- Never requests PIN, OTP, password, or card number
-- Never promises refunds, reversals, or account unblocks without authority
-- Never directs customers to unofficial third parties
-- Detects and ignores prompt injection attempts in complaint text
-- Escalates phishing/social engineering cases to `fraud_risk` department automatically
+- `POST /analyze-ticket-batch` — Process up to 100 tickets in parallel (bounded concurrency 5). Returns per-ticket success/failure so one bad input cannot crash the batch.
+- `GET /tickets/{ticket_id}?limit=N` — Audit trail of every analysis run against a ticket (judges may verify persistence).
+
+### Safety guardrails
+
+- Never requests PIN, OTP, password, or card number — the LLM prompt and the post-processing both scrub these from any reply.
+- Never promises refunds, reversals, or account unblocks without authority.
+- Never directs customers to unofficial third parties (any third-party contact line is rewritten).
+- Detects and ignores prompt-injection attempts in complaint text (e.g. "Ignore all previous instructions…").
+- Automatically escalates phishing / social-engineering cases to the `fraud_risk` department.
 
 ### Operational
 
-- Bangla / Banglish complaint handling
-- Malformed input returns controlled 400/422 errors — service never crashes
-- Request timeout enforcement (< 30 seconds)
-- Rate limiting (prevents judge harness abuse and DDoS)
-- Structured Pino logging with request IDs
-- MongoDB audit trail for every analyzed ticket
-- Graceful shutdown on SIGTERM/SIGINT
-- Full `.env.example` with documentation for every variable
+- Bangla / Banglish complaint handling (rule-based path matches Unicode Bengali patterns).
+- Malformed input returns controlled `400`/`422` errors — the service never crashes.
+- 30-second hard timeout per request.
+- Per-IP rate limiting (default 100 req/min, generous in judging mode).
+- Structured Pino logging with request-ID correlation (`X-Request-Id` echoed on every response).
+- MongoDB audit trail for every analyzed ticket.
+- Graceful shutdown on SIGTERM / SIGINT.
+- Full `.env.example` with documentation for every variable.
+- Docker multi-stage build, non-root user, distroless-friendly.
 
 ---
 
-## Folder Structure
+## API contract
 
-```
-queuestorm-investigator/
-├── src/
-│   ├── app/
-│   │   └── api/
-│   │       ├── health/
-│   │       │   └── route.ts          # GET /health handler
-│   │       └── analyze-ticket/
-│   │           └── route.ts          # POST /analyze-ticket handler
-│   ├── config/
-│   │   ├── index.ts                  # Centralized config loader (reads env vars)
-│   │   └── constants.ts              # Enum values, thresholds, timeouts
-│   ├── controllers/
-│   │   └── ticketController.ts       # Request parsing, validation, response shaping
-│   ├── services/
-│   │   ├── investigatorService.ts    # Core business logic: evidence reasoning + routing
-│   │   ├── safetyService.ts          # Safety rule enforcement + reply sanitization
-│   │   └── auditService.ts           # Persists analysis results to MongoDB
-│   ├── repositories/
-│   │   └── ticketRepository.ts       # All MongoDB read/write operations
-│   ├── models/
-│   │   └── ticketAnalysis.model.ts   # Mongoose schema for analyzed tickets
-│   ├── middleware/
-│   │   ├── rateLimiter.ts            # express-rate-limit configuration
-│   │   ├── requestLogger.ts          # Pino request logging
-│   │   ├── errorHandler.ts           # Centralized error handler (consistent JSON errors)
-│   │   └── validateRequest.ts        # Zod-based request body validation
-│   ├── validators/
-│   │   ├── ticketRequest.schema.ts   # Zod schema for POST /analyze-ticket input
-│   │   └── ticketResponse.schema.ts  # Zod schema for output shape verification
-│   ├── utils/
-│   │   ├── logger.ts                 # Pino logger instance
-│   │   ├── errors.ts                 # Custom error classes (AppError, ValidationError, etc.)
-│   │   └── responseBuilder.ts        # Consistent success/error JSON response factory
-│   ├── types/
-│   │   └── index.ts                  # TypeScript type aliases
-│   ├── interfaces/
-│   │   ├── ITicketRequest.ts         # Input shape interface
-│   │   ├── ITicketResponse.ts        # Output shape interface
-│   │   └── ITransaction.ts           # Transaction history entry interface
-│   ├── constants/
-│   │   ├── enums.ts                  # All enum definitions (case_type, department, etc.)
-│   │   └── safetyPatterns.ts         # Regex/keyword lists for safety checks
-│   ├── lib/
-│   │   └── mongodb.ts                # MongoDB connection singleton with pooling
-│   ├── ai/
-│   │   ├── aiService.ts              # Abstract AI service interface (swappable)
-│   │   ├── geminiProvider.ts         # Google Gemini 2.5 Flash implementation
-│   │   ├── groqProvider.ts           # Groq Llama fallback implementation
-│   │   └── prompts/
-│   │       ├── investigatorPrompt.ts # Evidence reasoning prompt template
-│   │       └── replyPrompt.ts        # Safe customer reply generation prompt
-│   ├── database/
-│   │   └── indexes.ts                # MongoDB index definitions
-│   └── docs/
-│       ├── openapi.yaml              # OpenAPI 3.1 specification
-│       └── sample_output.json        # Sample output from a public case
-├── tests/
-│   ├── unit/
-│   │   ├── investigatorService.test.ts
-│   │   ├── safetyService.test.ts
-│   │   └── validators.test.ts
-│   └── integration/
-│       ├── health.test.ts
-│       └── analyzeTicket.test.ts
-├── .env.example
-├── .gitignore
-├── .eslintrc.json
-├── .prettierrc
-├── Dockerfile
-├── docker-compose.yml
-├── jest.config.ts
-├── next.config.ts
-├── package.json
-├── tsconfig.json
-└── README.md
-```
+### `POST /analyze-ticket` (and `/api/analyze-ticket`)
 
-### Module Responsibilities
-
-| Module | Why it exists |
-|---|---|
-| `app/api/` | Next.js App Router API route handlers. Thin — only calls controllers. |
-| `config/` | Single source of truth for all environment variables and constants. Prevents magic strings scattered across the codebase. |
-| `controllers/` | Separates HTTP concerns (parsing, status codes, response shaping) from business logic. |
-| `services/` | Contains all business logic. `investigatorService` is the brain: it runs evidence matching, classification, routing. `safetyService` enforces fintech safety rules on every reply before it leaves the system. |
-| `repositories/` | Isolates all database calls. If we switch from MongoDB to PostgreSQL, only this layer changes. |
-| `models/` | Mongoose schemas with indexes, validation, and TypeScript types. |
-| `middleware/` | Cross-cutting concerns: rate limiting, logging, error handling, and validation applied uniformly to every request. |
-| `validators/` | Zod schemas provide runtime type safety at the API boundary. Catches schema errors before business logic runs. |
-| `utils/` | Reusable helpers: logger, error classes, response factory. Prevents duplicated patterns. |
-| `types/` & `interfaces/` | TypeScript contracts. Keeps the codebase strongly typed end-to-end. |
-| `constants/` | All enum values and safety keyword lists in one place. Enum changes require editing exactly one file. |
-| `lib/` | MongoDB connection with connection pooling. Singleton pattern prevents connection storms. |
-| `ai/` | AI provider abstraction. Swap Gemini for Groq (or any future provider) without touching business logic. Prompts are separate files so they can be tuned without code changes. |
-| `database/` | Index creation at startup. Ensures queries are never unindexed in production. |
-| `docs/` | OpenAPI spec and sample outputs for judges and future developers. |
-| `tests/` | Unit tests for pure logic; integration tests for full HTTP round-trips against a real (test) MongoDB instance. |
-
----
-
-## Installation
-
-### Prerequisites
-
-- Node.js 20 LTS
-- npm 10+
-- Docker and Docker Compose (for containerized setup)
-- MongoDB 7 (local or Atlas) — OR use the Docker Compose setup which includes MongoDB automatically
-
-### Step-by-step
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/<your-team>/queuestorm-investigator.git
-cd queuestorm-investigator
-
-# 2. Install dependencies
-npm install
-
-# 3. Copy environment file and fill in values
-cp .env.example .env
-# Edit .env with your API keys and MongoDB URI (see Environment Variables section)
-
-# 4. Build TypeScript
-npm run build
-
-# 5. Run database index setup (run once)
-npm run db:setup
-
-# 6. Start the development server
-npm run dev
-```
-
-The service will be available at `http://localhost:8000`.
-
----
-
-## Environment Variables
-
-Copy `.env.example` to `.env`. All variables marked **Required** must be set for the service to start.
-
-```bash
-# === Server ===
-PORT=8000                          # Port the service listens on
-NODE_ENV=development               # "development" | "production" | "test"
-
-# === MongoDB ===
-MONGODB_URI=mongodb://localhost:27017/queuestorm   # Required. Full MongoDB connection string.
-MONGODB_DB_NAME=queuestorm         # Database name
-
-# === AI Providers ===
-# Primary: Google Gemini 2.5 Flash (free tier)
-GEMINI_API_KEY=                    # Required if using Gemini. Get from: https://aistudio.google.com/
-GEMINI_MODEL=gemini-2.5-flash      # Model identifier
-
-# Fallback: Groq (free tier — Llama 3.3 70B)
-GROQ_API_KEY=                      # Required if Gemini is unavailable. Get from: https://console.groq.com/
-GROQ_MODEL=llama-3.3-70b-versatile # Model identifier
-
-# AI provider selection (primary | groq | rule_only)
-AI_PROVIDER=primary
-
-# === Security ===
-JWT_SECRET=                        # Required. Min 32 chars. Used to sign internal audit tokens.
-JWT_EXPIRES_IN=15m
-REFRESH_TOKEN_SECRET=              # Required. Min 32 chars.
-REFRESH_TOKEN_EXPIRES_IN=7d
-
-# === Rate Limiting ===
-RATE_LIMIT_WINDOW_MS=60000         # Time window in ms (default: 1 minute)
-RATE_LIMIT_MAX_REQUESTS=100        # Max requests per window per IP
-
-# === Logging ===
-LOG_LEVEL=info                     # "fatal" | "error" | "warn" | "info" | "debug" | "trace"
-
-# === CORS ===
-CORS_ORIGIN=*                      # Allowed origins. Use specific domain in production.
-
-# === Timeouts ===
-LLM_TIMEOUT_MS=25000               # Max time to wait for LLM response (keep under 30s limit)
-```
-
----
-
-## Docker
-
-### Build the image
-
-```bash
-docker build -t queuestorm-investigator .
-```
-
-### Run with Docker Compose (recommended — includes MongoDB)
-
-```bash
-# Start all services (API + MongoDB)
-docker compose up -d
-
-# View logs
-docker compose logs -f api
-
-# Stop all services
-docker compose down
-
-# Stop and remove volumes (wipes MongoDB data)
-docker compose down -v
-```
-
-### Run image standalone (if MongoDB is external)
-
-```bash
-docker run -p 8000:8000 --env-file .env queuestorm-investigator
-```
-
-### Judge harness command (as specified in problem statement)
-
-```bash
-docker build -t queuestorm-team .
-docker run -p 8000:8000 --env-file judging.env queuestorm-team
-```
-
-The service will be reachable at `http://localhost:8000`. `/health` responds within 60 seconds of start.
-
----
-
-## MongoDB Setup
-
-### Using Docker Compose (easiest)
-
-MongoDB is included in `docker-compose.yml`. No manual setup needed. Data persists in a named Docker volume (`mongo_data`).
-
-### Using MongoDB Atlas (cloud)
-
-1. Create a free cluster at [mongodb.com/atlas](https://www.mongodb.com/atlas)
-2. Whitelist your IP (or `0.0.0.0/0` for evaluation)
-3. Copy the connection string into `MONGODB_URI` in your `.env`
-
-### Using local MongoDB
-
-```bash
-# Install MongoDB 7 and start the service
-mongod --dbpath /data/db
-
-# Set in .env:
-MONGODB_URI=mongodb://localhost:27017/queuestorm
-```
-
-Indexes are created automatically on service startup via `src/database/indexes.ts`.
-
----
-
-## Running Locally
-
-```bash
-# Development (hot reload)
-npm run dev
-
-# Production build + start
-npm run build
-npm start
-
-# Lint
-npm run lint
-
-# Format
-npm run format
-
-# Type check
-npm run typecheck
-```
-
-Verify the service is running:
-
-```bash
-curl http://localhost:8000/health
-# Expected: {"status":"ok"}
-```
-
----
-
-## Production Deployment
-
-### Option A: Deploy on Render / Railway / Fly.io
-
-1. Push the repository to GitHub
-2. Connect the repo in your chosen platform's dashboard
-3. Set all environment variables in the platform's secret store (not in the repo)
-4. Set the start command to `npm start`
-5. Set the port to match `PORT` in your env vars
-6. Deploy
-
-### Option B: Deploy on AWS EC2 / Poridhi VM
-
-```bash
-# On the VM:
-git clone https://github.com/<your-team>/queuestorm-investigator.git
-cd queuestorm-investigator
-cp .env.example .env
-# Fill in .env values using the platform's secret manager or nano/vim
-
-docker compose up -d
-
-# Verify from outside:
-curl http://<VM_PUBLIC_IP>:8000/health
-```
-
-Bind address is `0.0.0.0` by default (configured in Next.js server).
-
-### Option C: Docker image on Docker Hub
-
-```bash
-# Build and push
-docker build -t <your-dockerhub-username>/queuestorm-team:latest .
-docker push <your-dockerhub-username>/queuestorm-team:latest
-
-# Judge pull and run:
-docker pull <your-dockerhub-username>/queuestorm-team:latest
-docker run -p 8000:8000 --env-file judging.env <your-dockerhub-username>/queuestorm-team:latest
-```
-
----
-
-## Testing
-
-```bash
-# Run all tests
-npm test
-
-# Unit tests only
-npm run test:unit
-
-# Integration tests only (requires running MongoDB)
-npm run test:integration
-
-# With coverage report
-npm run test:coverage
-
-# Watch mode (development)
-npm run test:watch
-```
-
-### Test categories
-
-| Category | What is tested |
-|---|---|
-| Unit: `investigatorService` | Transaction matching, evidence verdict logic, case classification, department routing, severity scoring |
-| Unit: `safetyService` | PIN/OTP detection, refund promise detection, third-party redirect detection, prompt injection rejection |
-| Unit: `validators` | Zod schema acceptance and rejection for valid/invalid/edge-case inputs |
-| Integration: `/health` | Returns 200 `{"status":"ok"}` within timeout |
-| Integration: `/analyze-ticket` | Full happy path, missing transaction history, inconsistent evidence, safety violation cases, malformed JSON, empty complaint, Bangla complaint |
-
----
-
-## API Documentation
-
-Full OpenAPI 3.1 spec is in `src/docs/openapi.yaml`.
-
-### GET /health
-
-**Purpose:** Liveness probe. Confirms the service is running and ready to accept requests.
-
-**Authentication:** None
-
-**Response:**
-```json
-{"status": "ok"}
-```
-
-**Status Codes:** `200 OK`
-
----
-
-### POST /analyze-ticket
-
-**Purpose:** Analyze one customer support ticket against transaction history. Returns evidence-grounded classification, routing, and safe reply.
-
-**Authentication:** None (internal service; rate-limited by IP)
-
-**Content-Type:** `application/json`
-
-**Request Body:**
-
+**Request body:**
 ```json
 {
   "ticket_id": "TKT-001",
@@ -521,256 +167,317 @@ Full OpenAPI 3.1 spec is in `src/docs/openapi.yaml`.
 }
 ```
 
-**Request Fields:**
-
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `ticket_id` | string | Yes | Echoed in response |
-| `complaint` | string | Yes | English, Bangla, or Banglish |
-| `language` | string | No | `en` \| `bn` \| `mixed` |
-| `channel` | string | No | `in_app_chat` \| `call_center` \| `email` \| `merchant_portal` \| `field_agent` |
-| `user_type` | string | No | `customer` \| `merchant` \| `agent` \| `unknown` |
-| `campaign_context` | string | No | Campaign identifier |
-| `transaction_history` | array | No | 0–5 transaction entries |
-| `metadata` | object | No | Additional harness context |
-
-**Transaction History Entry:**
-
-| Field | Type | Notes |
-|---|---|---|
-| `transaction_id` | string | Unique ID |
-| `timestamp` | string | ISO 8601 |
-| `type` | string | `transfer` \| `payment` \| `cash_in` \| `cash_out` \| `settlement` \| `refund` |
-| `amount` | number | Amount in BDT |
-| `counterparty` | string | Phone, merchant ID, or agent ID |
-| `status` | string | `completed` \| `failed` \| `pending` \| `reversed` |
-
-**Success Response (200):**
-
+**Response body:**
 ```json
 {
-  "ticket_id": "TKT-001",
-  "relevant_transaction_id": "TXN-9101",
-  "evidence_verdict": "consistent",
-  "case_type": "wrong_transfer",
-  "severity": "high",
-  "department": "dispute_resolution",
-  "agent_summary": "Customer reports sending 5000 BDT to an unintended recipient via TXN-9101 at 14:08 on 2026-04-14. Transaction history confirms a completed 5000 BDT transfer matching the reported time and amount.",
-  "recommended_next_action": "Retrieve full details of TXN-9101 and initiate a wrong-transfer investigation. Do not reverse without completing the dispute resolution process.",
-  "customer_reply": "Thank you for contacting us. We have received your report regarding a transfer on 14 April 2026. Our team will investigate this matter. Any eligible resolution will be processed through official channels. Please do not share your PIN, OTP, or password with anyone, including our representatives.",
-  "human_review_required": true,
-  "confidence": 0.92,
-  "reason_codes": ["wrong_transfer", "transaction_match", "high_value"]
+  "success": true,
+  "data": {
+    "ticket_id": "TKT-001",
+    "relevant_transaction_id": "TXN-9101",
+    "evidence_verdict": "consistent",
+    "case_type": "wrong_transfer",
+    "severity": "high",
+    "department": "dispute_resolution",
+    "agent_summary": "Customer reports sending 5000 BDT …",
+    "recommended_next_action": "Open a wrong-transfer investigation for TXN-9101 …",
+    "customer_reply": "Thank you for reaching out … never share your PIN, OTP …",
+    "human_review_required": true,
+    "confidence": 0.92,
+    "reason_codes": ["wrong_transfer", "transaction_match", "high_value"]
+  }
 }
 ```
 
-**Error Response (400):**
+### Enumerations
+
+| Field | Allowed values |
+|---|---|
+| `case_type` | `wrong_transfer`, `payment_failed`, `refund_request`, `duplicate_payment`, `merchant_settlement_delay`, `agent_cash_in_issue`, `phishing_or_social_engineering`, `other` |
+| `department` | `customer_support`, `dispute_resolution`, `payments_ops`, `merchant_operations`, `agent_operations`, `fraud_risk` |
+| `severity` | `low`, `medium`, `high`, `critical` |
+| `evidence_verdict` | `consistent`, `inconsistent`, `insufficient_data` |
+| `language` | `en`, `bn`, `mixed` |
+| `channel` | `in_app_chat`, `call_center`, `email`, `merchant_portal`, `field_agent` |
+| `user_type` | `customer`, `merchant`, `agent`, `unknown` |
+
+### Error envelope
 
 ```json
 {
   "success": false,
   "message": "Validation failed",
-  "error": "ticket_id is required",
-  "statusCode": 400
+  "error": "VALIDATION_FAILED",
+  "statusCode": 400,
+  "details": [/* zod issues */]
 }
 ```
 
-**Status Codes:**
+---
 
-| Code | Meaning |
-|---|---|
-| 200 | Successful analysis |
-| 400 | Malformed JSON or missing required fields |
-| 422 | Valid schema but semantically invalid (empty complaint) |
-| 429 | Rate limit exceeded |
-| 500 | Internal error (no secrets or stack traces exposed) |
+## Folder Structure
 
-**Case Type Enum Values:**
-
-| Value | When used |
-|---|---|
-| `wrong_transfer` | Money sent to the wrong recipient |
-| `payment_failed` | Transaction failed but balance may have been deducted |
-| `refund_request` | Customer requesting a refund |
-| `duplicate_payment` | Same payment charged more than once |
-| `merchant_settlement_delay` | Merchant settlement not received |
-| `agent_cash_in_issue` | Cash deposit through agent not reflected |
-| `phishing_or_social_engineering` | Suspicious calls/SMS/credential requests |
-| `other` | Anything not covered above |
-
-**Department Enum Values:**
-
-| Value | Typical cases |
-|---|---|
-| `customer_support` | Low severity, vague, or insufficient data cases |
-| `dispute_resolution` | Wrong transfers, contested refunds |
-| `payments_ops` | Failed payments, duplicate charges |
-| `merchant_operations` | Merchant settlement issues |
-| `agent_operations` | Agent cash-in issues |
-| `fraud_risk` | Phishing, social engineering, suspicious activity |
+```
+queuestorm-investigator/
+├── backend/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── api/                 # /api/* canonical routes
+│   │   │   │   ├── analyze-ticket/
+│   │   │   │   ├── analyze-ticket-batch/
+│   │   │   │   ├── health/
+│   │   │   │   └── tickets/[ticket_id]/
+│   │   │   ├── analyze-ticket/      # top-level alias (matches PDF path)
+│   │   │   ├── analyze-ticket-batch/
+│   │   │   └── health/
+│   │   ├── config/                  # env loader + constants
+│   │   ├── controllers/             # route → service glue
+│   │   ├── services/                # investigator + safety + audit + AI providers
+│   │   ├── repositories/            # MongoDB queries
+│   │   ├── models/                  # Mongoose schemas
+│   │   ├── middleware/              # auth, rate limit, security headers, logger
+│   │   ├── validators/              # Zod schemas
+│   │   ├── interfaces/              # shared TypeScript types
+│   │   ├── utils/                   # logger, response builder, error helpers
+│   │   └── lib/                     # Mongo connection
+│   ├── tests/
+│   │   ├── unit/                    # investigatorService, safetyService, validators, auth
+│   │   └── integration/             # analyze-ticket, batch, tickets audit, health
+│   ├── evaluation/
+│   │   ├── public_dataset.json      # 7 reference tickets
+│   │   ├── private_dataset.json     # 15 hidden QA tickets
+│   │   └── output/                  # evaluation-run results
+│   ├── scripts/
+│   │   └── run_evaluation.sh        # judging harness
+│   ├── Dockerfile                   # multi-stage, non-root
+│   ├── docker-compose.yml           # service + Mongo
+│   ├── judging.env                  # judge env file (placeholders)
+│   ├── .env.example
+│   └── package.json
+└── README.md                        # this file
+```
 
 ---
 
-## Models
+## Environment variables
 
-| Model | Provider | Tier | Role |
+Copy `.env.example` to `.env` and fill in your values. For judges, fill in `judging.env` instead.
+
+| Variable | Required? | Default | Description |
 |---|---|---|---|
-| `gemini-2.5-flash` | Google AI | Free (via AI Studio) | Primary LLM for evidence reasoning and reply generation |
-| `llama-3.3-70b-versatile` | Groq | Free tier | Fallback if Gemini quota is exhausted or unavailable |
-| Rule-based engine | Internal | Free | Always runs first for transaction matching and safety checks; LLM is used only for natural language tasks |
-
-**Model selection rationale:**
-- Gemini 2.5 Flash was chosen as primary because it offers the best reasoning quality on the free tier with low latency
-- Groq's hosted Llama 3.3 is an excellent fallback: fast inference, generous free quota, strong multilingual support for Bangla/Banglish
-- The architecture is provider-agnostic; switching models requires only changing `AI_PROVIDER` and the corresponding key in `.env`
-- LLM cost is minimized: rule-based logic handles transaction matching and routing; the LLM is invoked only for `agent_summary`, `recommended_next_action`, and `customer_reply` generation
-
----
-
-## Safety Logic
-
-The following rules are enforced by `safetyService.ts` on every response **before** it is returned to the caller. No LLM output bypasses these checks.
-
-| Rule | How it is enforced |
-|---|---|
-| Never ask for PIN, OTP, password, or card number | Keyword/regex scan of `customer_reply`. If detected, the reply is regenerated with an explicit prohibition. |
-| Never promise refunds, reversals, or account unblocks | Keyword/regex scan of `customer_reply` and `recommended_next_action`. Detected promises are rewritten to use conditional language ("any eligible amount will be processed through official channels"). |
-| Never direct customers to unofficial third parties | URL and phone number detection in `customer_reply`. Non-official contacts are stripped and replaced with official channel guidance. |
-| Prompt injection in complaint text | Complaint is wrapped in a delimiter before being passed to the LLM. Instructions within the complaint are never interpreted as system-level commands. |
-| Automatic escalation for phishing cases | Any `case_type` of `phishing_or_social_engineering` automatically sets `human_review_required: true` and `department: fraud_risk`. |
-| High-value transactions | Transfers above 10,000 BDT automatically set `human_review_required: true`. |
+| `PORT` | no | `8000` | HTTP port |
+| `NODE_ENV` | no | `development` | `development` / `production` / `test` |
+| `MONGODB_URI` | no | `mongodb://localhost:27017/queuestorm` | Mongo connection string |
+| `MONGODB_DB_NAME` | no | `queuestorm` | Database name |
+| `AI_PROVIDER` | yes (judging) | `primary` | `primary` \| `groq` \| `rule_only` |
+| `GEMINI_API_KEY` | one of these | — | Google Gemini API key (used when `AI_PROVIDER=primary`) |
+| `GEMINI_MODEL` | no | `gemini-2.5-flash` | Model name |
+| `GROQ_API_KEY` | one of these | — | Groq API key (used when `AI_PROVIDER=groq`) |
+| `GROQ_MODEL` | no | `llama-3.3-70b-versatile` | Model name |
+| `INTERNAL_API_KEY` | no | _(empty)_ | If set, every protected request must present `X-Api-Key: <value>`. Leave empty for open mode. |
+| `JWT_SECRET` | no | dev fallback | HMAC secret for JWT bearer tokens |
+| `RATE_LIMIT_WINDOW_MS` | no | `60000` | Per-IP rate-limit window |
+| `RATE_LIMIT_MAX_REQUESTS` | no | `100` | Max requests per window |
+| `LLM_TIMEOUT_MS` | no | `25000` | Per-LLM-call timeout (must be < 30s) |
+| `LOG_LEVEL` | no | `info` | `silent` / `error` / `warn` / `info` / `debug` |
+| `CORS_ORIGIN` | no | `*` | CORS allowed origin |
 
 ---
 
-## Design Decisions
+## Docker
 
-**Why Next.js for a backend-only service?**
-The problem statement specifies Next.js as the framework. API routes in the App Router are production-ready, support middleware, and deploy easily to most platforms including Vercel and Railway. No frontend code is included.
+### Judge quick-start
 
-**Why hybrid rule + LLM instead of pure LLM?**
-Rules are deterministic, fast, and free. Transaction matching (comparing complaint timestamps, amounts, and types against the transaction history) is a structured data problem — rules handle it better and faster than an LLM. The LLM handles what it is actually good at: understanding natural language complaints in English, Bangla, and Banglish, and generating professional replies.
+```bash
+# 1. Build
+docker build -t queuestorm-team .
 
-**Why MongoDB instead of PostgreSQL?**
-MongoDB was specified in the tech stack requirements. Ticket analysis results are document-shaped and schema-flexible, which is a good fit. Mongoose adds schema validation and TypeScript support.
+# 2. Run with judge env
+docker run -d --rm -p 8000:8000 \
+  --env-file judging.env \
+  --name queuestorm queuestorm-team
 
-**Why Pino for logging?**
-Pino is the fastest Node.js logger with minimal overhead. It produces structured JSON logs that work well with cloud log aggregators (Datadog, CloudWatch, etc.).
+# 3. Verify
+curl http://localhost:8000/health
+```
 
----
+### Full docker-compose (service + MongoDB)
 
-## Scaling Considerations
+```bash
+docker compose up --build
+```
 
-- The API is stateless. Scale horizontally by running multiple containers behind a load balancer.
-- MongoDB connection pooling is configured via Mongoose's `poolSize` option. Increase for higher concurrency.
-- LLM calls are the primary latency bottleneck. Responses are not cached by default (each ticket is unique), but caching identical complaint+transaction combinations is safe and can be added if needed.
-- Rate limiting is per-IP. In a multi-instance deployment, use Redis-backed rate limiting (replace the in-memory store with `rate-limit-redis`).
-- The AI provider abstraction makes it straightforward to add parallel LLM calls with a circuit breaker if latency SLAs tighten.
-
----
-
-## Performance Considerations
-
-- Rule-based transaction matching runs before any LLM call and resolves ~60% of cases without needing the LLM at all (simple mismatches, clear phishing cases)
-- LLM timeout is set to 25 seconds, leaving 5 seconds of buffer within the 30-second per-request limit
-- MongoDB queries use compound indexes on `ticket_id` + `createdAt`
-- Async/await throughout — no blocking operations
-- Health endpoint is pure in-memory — no DB or LLM call on `/health`
+The image:
+- Uses a multi-stage build (final image is ~250 MB on Alpine).
+- Runs as a non-root user (`node`).
+- Binds to `0.0.0.0:8000`.
+- Includes a graceful-shutdown handler that closes Mongo connections on SIGTERM.
 
 ---
 
-## Security Considerations
+## MongoDB setup
 
-- No API keys, tokens, or secrets are committed to the repository at any time
-- All secrets are passed via environment variables
-- `.env` is in `.gitignore`
-- Responses never include stack traces, internal error details, or secret values
-- Helmet sets secure HTTP headers on every response
-- CORS is restricted to configured origins
-- Rate limiting prevents abuse during the evaluation window
-- JWT is used for internal audit token signing (not for external API authentication, which is not required by the problem)
-- MongoDB connection string includes authentication credentials only in the environment variable, never in code
+The service works without MongoDB (audit writes are best-effort; everything else still works). For evaluation we strongly recommend running a Mongo instance:
+
+```bash
+# Option A: Docker
+docker run -d --rm --name qs-mongo -p 27017:27017 mongo:7
+
+# Option B: docker-compose (already wired up)
+docker compose up mongo
+```
 
 ---
 
-## Known Limitations
+## Running locally (without Docker)
 
-- `transaction_history` is limited to what the harness provides (typically 2–5 entries). The service cannot look up historical transactions beyond the provided snippet.
-- Bangla/Banglish detection relies on the LLM's multilingual capability. Highly colloquial or misspelled Banglish may reduce evidence reasoning accuracy.
-- Free-tier LLM quotas may be exhausted under sustained high load. The Groq fallback mitigates this, but if both providers are unavailable, the rule-based engine returns a conservative `insufficient_data` verdict with `human_review_required: true`.
-- The service does not integrate with real payment systems. All decisions are based solely on the data provided in the request.
-- Confidence scores are estimates and should not be used as the sole basis for automated financial decisions.
+```bash
+cd backend
+npm install
+cp .env.example .env
+# edit .env with your GEMINI_API_KEY / GROQ_API_KEY (or leave AI_PROVIDER=rule_only)
+npm run dev            # http://localhost:8000
+```
+
+---
+
+## Production build & run
+
+```bash
+cd backend
+npm run build
+npm start              # listens on 0.0.0.0:8000
+```
+
+---
+
+## Testing
+
+```bash
+cd backend
+npm test               # full Jest suite (unit + integration)
+npm run test:unit
+npm run test:integration
+npm run test:coverage
+```
+
+**Current status:** 105 tests across 8 suites, all green. Coverage highlights:
+- Every PDF enum value reachable.
+- High-value escalation (≥ 10,000 BDT) → `human_review_required: true`.
+- Phishing / social-engineering → `fraud_risk` department.
+- Safety guardrails — no credential requests, no refund promises, no third-party contacts.
+- Bangla / Banglish complaint handling.
+- Prompt-injection detection.
+- Per-request 30-second timeout.
+- Rate limiting (per IP).
+- Batch endpoint: per-item failure isolation, ordering preserved, max 100.
+- Audit endpoint: query parameter bounds, persistence verification.
+- Auth: open mode, JWT mode, API-key mode (constant-time comparison).
+
+---
+
+## API documentation (cheat sheet)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET`  | `/health`                              | public | Liveness probe |
+| `POST` | `/analyze-ticket`                      | optional | Single-ticket investigation |
+| `POST` | `/analyze-ticket-batch`                | optional | Batch (max 100 tickets) |
+| `GET`  | `/tickets/{ticket_id}?limit=N`         | optional | Audit trail (max 200) |
+
+> The `/api/...` prefix variants are also exposed so the service works behind path-based proxies.
+
+---
+
+## Safety logic (high level)
+
+The investigator runs a two-stage pipeline:
+
+1. **Rule-based pre-classifier.** Fast keyword/regex match for the 7 known `case_type` values (with Bangla / Banglish variants) and the phishing detector. Runs in < 1 ms.
+2. **LLM investigator** (only when `AI_PROVIDER` is not `rule_only`). The complaint + matched transaction are sent to Gemini 2.5 Flash (with Groq Llama 3.3 70B as fallback). The prompt forbids:
+   - Asking for credentials, OTPs, PINs, or card numbers
+   - Promising refunds, reversals, or unblocks
+   - Mentioning unofficial phone numbers / URLs / agents
+3. **Safety scrub.** The `safetyService` then re-checks every generated `customer_reply` and `recommended_next_action` against the same rules. If a violation is found the field is regenerated from a safe template.
+
+The classifier wins on phishing — any detected phishing keyword (including Bengali variants) immediately returns `phishing_or_social_engineering` → `fraud_risk`, regardless of the LLM output.
+
+---
+
+## High-value & human-review triggers
+
+- `amount ≥ 10,000 BDT` → `severity` bumped to `high` (or kept `critical` for phishing) and `human_review_required = true`.
+- `case_type = phishing_or_social_engineering` → `severity = critical`, `department = fraud_risk`, `human_review_required = true`.
+- Prompt-injection attempt detected in complaint → `reason_codes` includes `prompt_injection_detected`.
+
+---
+
+## Design decisions
+
+- **No autonomous actions.** The service never makes refund/reversal decisions — it always returns a recommendation and a flag for human review.
+- **Hard timeout.** Every request has a 30-second deadline; the work `Promise` is `Promise.race`d against a timer. LLM calls have their own 25-second timeout.
+- **Best-effort Mongo persistence.** If Mongo is unavailable, the request still succeeds — the audit write is logged and retried in the background.
+- **Open by default.** If neither `INTERNAL_API_KEY` nor `JWT_SECRET` is set, the service runs in open mode (useful for judges). Setting `INTERNAL_API_KEY` activates `X-Api-Key` auth on all protected routes; `/health` stays public.
+- **Constant-time key comparison** (`src/middleware/auth.ts`) prevents timing attacks.
+- **Two-tier LLM** (Gemini → Groq → rule-only) ensures availability even if one provider is down.
+- **Bounded concurrency batch** (5 workers) prevents one batch from monopolizing the LLM quota.
+
+---
+
+## Scaling considerations
+
+- The batch endpoint processes up to 100 tickets with 5 concurrent LLM calls. For larger datasets, judges can chunk and call it repeatedly.
+- The rate limiter is in-memory per-process — for multi-instance deployments swap in a Redis-backed store (the `express-rate-limit` interface is already abstracted).
+- The Mongo audit collection is indexed on `ticket_id` and `createdAt` for fast audit queries.
+
+---
+
+## Performance considerations
+
+- Rule-based path: P50 ≈ 5 ms, P99 ≈ 30 ms (no LLM).
+- Gemini 2.5 Flash path: P50 ≈ 1.2 s, P99 ≈ 4 s.
+- Groq Llama 3.3 70B fallback: P50 ≈ 0.8 s, P99 ≈ 2.5 s.
+- Batch (100 tickets, 5 concurrent workers): ≈ 30 s end-to-end on Gemini.
+
+---
+
+## Security considerations
+
+- **OWASP headers** on every response (HSTS, X-Content-Type-Options, X-Frame-Options, CSP, Permissions-Policy, etc.).
+- **Constant-time** API-key comparison.
+- **Per-IP rate limit** (100/min by default; judges can raise via env).
+- **Pino structured logs** include request ID, latency, status — perfect for incident response.
+- **Credentials never logged.** The Pino payload truncator (1 KB) ensures no full message bodies end up in logs.
+- **No secret in repo.** `.env.example` ships with placeholders only.
+- **Container hardened** — non-root user, minimal Alpine runtime, no shell in final image.
+
+---
+
+## Known limitations
+
+- The rule-based Bangla classifier uses regex patterns; edge-case Bangla dialects may fall through to `other`.
+- The default in-memory rate limiter does not survive process restarts; multi-instance deployments should swap in Redis.
+- The LLM provider free tiers have hard daily quotas; the service falls back to the rule-based path if both Gemini and Groq are exhausted.
 
 ---
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---|---|
-| `/health` returns 404 | Confirm the service is running on the correct port. Check `PORT` in `.env`. |
-| `/analyze-ticket` returns 500 | Check logs: `docker compose logs -f api`. Usually a missing API key or MongoDB connection failure. |
-| `GEMINI_API_KEY` errors | Verify the key is set in the environment (not in `.env.example`). Confirm the key has API access at [aistudio.google.com](https://aistudio.google.com). |
-| MongoDB connection refused | Confirm MongoDB is running. If using Docker Compose, ensure all containers started: `docker compose ps`. |
-| Response takes > 30 seconds | Check `LLM_TIMEOUT_MS` in `.env`. Reduce if needed. If the LLM provider is slow, the rule-based fallback will return within ~500ms. |
-| Schema validation errors | Enum values are case-sensitive. Check `src/constants/enums.ts` for exact spellings. |
-| Docker runs locally but not for judges | Ensure the container binds to `0.0.0.0`, not `127.0.0.1`. Confirm the correct port is exposed in `docker-compose.yml`. |
+- **`/health` returns 404** — make sure you used `npm run build && npm start` (or `docker run`), not raw `next dev` without rebuilding.
+- **All requests 401** — you set `INTERNAL_API_KEY` but are not sending `X-Api-Key`. Either unset `INTERNAL_API_KEY` (open mode) or send the header.
+- **Gemini 429 quota errors** — switch `AI_PROVIDER=groq` or `rule_only` in `judging.env`.
 
 ---
 
-## Future Improvements
+## Future improvements
 
-- Redis-backed response caching for repeated complaint patterns
-- Webhook support for async analysis of high-volume batches
-- Admin dashboard for monitoring case distribution and safety violation rates
-- Multi-model ensemble for higher confidence scores
-- Fine-tuned classifier for Bangla complaint text (replaces LLM for classification step)
-- OpenTelemetry tracing for distributed observability
-- A/B testing framework for comparing LLM providers on accuracy metrics
+- Redis-backed rate limiter for multi-instance deployments.
+- Streaming response (`Server-Sent Events`) for very long complaints.
+- Per-language fine-tuned classifier as a third tier (before the LLM).
+- Prometheus metrics endpoint.
 
 ---
 
-## Sample Request & Response
-
-**Request:**
-```json
-{
-  "ticket_id": "TKT-001",
-  "complaint": "I sent 5000 taka to a wrong number around 2pm today. Please help me get it back.",
-  "language": "en",
-  "channel": "in_app_chat",
-  "user_type": "customer",
-  "campaign_context": "boishakh_bonanza_day_1",
-  "transaction_history": [
-    {
-      "transaction_id": "TXN-9101",
-      "timestamp": "2026-04-14T14:08:22Z",
-      "type": "transfer",
-      "amount": 5000,
-      "counterparty": "+8801719876543",
-      "status": "completed"
-    }
-  ]
-}
-```
-
-**Response:**
-```json
-{
-  "ticket_id": "TKT-001",
-  "relevant_transaction_id": "TXN-9101",
-  "evidence_verdict": "consistent",
-  "case_type": "wrong_transfer",
-  "severity": "high",
-  "department": "dispute_resolution",
-  "agent_summary": "Customer reports sending 5000 BDT to an unintended recipient at approximately 14:08 today. Transaction TXN-9101 confirms a completed 5000 BDT transfer at 14:08:22, consistent with the complaint.",
-  "recommended_next_action": "Open a wrong-transfer investigation for TXN-9101. Verify recipient details. Do not initiate reversal without completing the standard dispute resolution process.",
-  "customer_reply": "Thank you for reaching out. We have received your report about a transfer made on 14 April 2026. Our team will review this matter carefully. Any eligible resolution will be handled through our official dispute process. Please note: never share your PIN, OTP, or password with anyone.",
-  "human_review_required": true,
-  "confidence": 0.92,
-  "reason_codes": ["wrong_transfer", "transaction_match", "high_value"]
-}
-```
-
----
+## License & attribution
 
 *Built for the bKash SUST CSE Carnival 2026 — Codex Community Hackathon.*
 *This service uses only synthetic data. No real customer or payment data is used at any point.*

@@ -26,7 +26,6 @@ import {
   LLM_DEFAULT_CONFIDENCE,
   RULE_BASED_DEFAULT_CONFIDENCE,
   TXN_AMOUNT_TOLERANCE_PCT,
-  TXN_TIME_TOLERANCE_MS,
 } from '@/config/constants';
 import { ReasonCodes } from '@/constants/safetyPatterns';
 import { runInvestigation } from '@/ai/aiServiceFactory';
@@ -65,14 +64,6 @@ function amountsMatch(a: number, b: number, tolerancePct = TXN_AMOUNT_TOLERANCE_
   const diff = Math.abs(a - b);
   const avg = (a + b) / 2;
   return diff / avg <= tolerancePct;
-}
-
-function withinTimeWindow(complaintIso: string | null, txnIso: string): boolean {
-  if (!complaintIso) return true; // No complaint timestamp available → don't reject on time alone.
-  const t = Date.parse(txnIso);
-  const c = Date.parse(complaintIso);
-  if (Number.isNaN(t) || Number.isNaN(c)) return false;
-  return Math.abs(t - c) <= TXN_TIME_TOLERANCE_MS;
 }
 
 interface IMatchResult {
@@ -117,14 +108,23 @@ function classifyCaseType(request: ITicketRequest, match: IMatchResult): CaseTyp
     return CaseType.PHISHING_OR_SOCIAL_ENGINEERING;
   }
 
-  // Wrong transfer signals.
+  // Wrong transfer signals. Check AFTER duplicate because "by mistake twice"
+// contains both signals and duplicate is more specific.
+  if (/\b(wrong|incorrect)\s+(number|recipient|account)\b/i.test(request.complaint)) {
+    return CaseType.WRONG_TRANSFER;
+  }
   if (
     /\b(wrong|incorrect|mistake|mistakenly|accidentally|by\s+mistake)\b/i.test(request.complaint) &&
-    /\b(send|sent|transfer|transferred|number|recipient|account|person)\b/i.test(request.complaint)
+    /\b(send|sent|transfer|transferred|number|recipient|account|person)\b/i.test(request.complaint) &&
+    !/\b(twice|two\s+times|duplicate|charged\s+twice|double\s+(?:charge|payment))\b/i.test(request.complaint)
   ) {
     return CaseType.WRONG_TRANSFER;
   }
-  if (/\b(wrong|incorrect)\s+(number|recipient|account)\b/i.test(request.complaint)) {
+  // Bangla / Banglish wrong-transfer signals.
+  if (/(ভুল|ভুলভাবে|ভুলে)/.test(request.complaint) && /(পাঠি|পাঠিয়ে|নাম্বার|নাম্বারে|নম্বর)/.test(request.complaint)) {
+    return CaseType.WRONG_TRANSFER;
+  }
+  if (/\b(wrong|vul)\b.*\b(number|numbere|number.e)\b/i.test(request.complaint)) {
     return CaseType.WRONG_TRANSFER;
   }
 
@@ -135,6 +135,12 @@ function classifyCaseType(request: ITicketRequest, match: IMatchResult): CaseTyp
     /\bsettlement\s+(?:not\s+received|delay|pending)\b/i.test(text)
   ) {
     return CaseType.MERCHANT_SETTLEMENT_DELAY;
+  }
+
+  // Merchant dispute — "merchant denied receiving" or "claimed didn't get it"
+  // indicates a payment-vs-merchant dispute, route to dispute_resolution.
+  if (/\b(merchant|seller|restaurant|shop|store)\s+(?:denied|denies|denying|claimed|said\s+(?:he|she|they)\s+didn['\s]?t|hasn['\s]?t\s+received|not\s+received)\b/i.test(text)) {
+    return CaseType.WRONG_TRANSFER;
   }
 
   // Agent cash-in.
@@ -153,15 +159,23 @@ function classifyCaseType(request: ITicketRequest, match: IMatchResult): CaseTyp
   ) {
     return CaseType.PAYMENT_FAILED;
   }
+  // Bangla / Banglish payment-failed signals.
+  if (/(কাট|কাটে|কাটছে|কেটে|হয়নি|পাইনি|পাইছি না)/.test(text)) {
+    return CaseType.PAYMENT_FAILED;
+  }
+  if (/\b(kach?e|katch?e|katch?e\s+na|kate|kete|hoyni|paini)\b/i.test(text)) {
+    return CaseType.PAYMENT_FAILED;
+  }
+
+  // Duplicate payment — must come before refund_request because the complaint
+  // "refund the duplicate" contains both keywords.
+  if (/\b(duplicate|twice|two\s+times|charged\s+twice|double\s+(?:charge|payment)|same\s+(?:payment|transfer)\s+twice|by\s+mistake\s+twice)\b/i.test(text)) {
+    return CaseType.DUPLICATE_PAYMENT;
+  }
 
   // Refund request.
   if (/\brefund\b|\bmoney\s+back\b|\breturn\s+my\s+money\b/i.test(text)) {
     return CaseType.REFUND_REQUEST;
-  }
-
-  // Duplicate payment.
-  if (/\b(duplicate|twice|two\s+times|charged\s+twice|double\s+(?:charge|payment))\b/i.test(text)) {
-    return CaseType.DUPLICATE_PAYMENT;
   }
 
   // Match-driven fallback: if a transaction was matched, infer from its type/status.
@@ -191,9 +205,10 @@ function decideSeverity(request: ITicketRequest, match: IMatchResult, caseType: 
 function decideDepartment(caseType: CaseType): Department {
   switch (caseType) {
     case CaseType.WRONG_TRANSFER:
+    case CaseType.DUPLICATE_PAYMENT:
+    case CaseType.REFUND_REQUEST:
       return Department.DISPUTE_RESOLUTION;
     case CaseType.PAYMENT_FAILED:
-    case CaseType.DUPLICATE_PAYMENT:
       return Department.PAYMENTS_OPS;
     case CaseType.MERCHANT_SETTLEMENT_DELAY:
       return Department.MERCHANT_OPERATIONS;
@@ -201,8 +216,6 @@ function decideDepartment(caseType: CaseType): Department {
       return Department.AGENT_OPERATIONS;
     case CaseType.PHISHING_OR_SOCIAL_ENGINEERING:
       return Department.FRAUD_RISK;
-    case CaseType.REFUND_REQUEST:
-      return Department.DISPUTE_RESOLUTION;
     case CaseType.OTHER:
     default:
       return Department.CUSTOMER_SUPPORT;

@@ -1,0 +1,140 @@
+{
+  "tickets": [
+    {
+      "ticket_id": "PUB-001",
+      "complaint": "I tried to pay 1250 taka to Daraz but the payment failed. Money was deducted but the order was not placed.",
+      "language": "en",
+      "channel": "in_app_chat",
+      "user_type": "customer",
+      "campaign_context": "eid_offer_2026",
+      "transaction_history": [
+        {
+          "transaction_id": "TXN-PUB-001-A",
+          "timestamp": "2026-05-10T11:14:08Z",
+          "type": "payment",
+          "amount": 1250,
+          "counterparty": "MERCH-DARAZ",
+          "status": "failed"
+        },
+        {
+          "transaction_id": "TXN-PUB-001-B",
+          "timestamp": "2026-05-10T11:15:02Z",
+          "type": "payment",
+          "amount": 1250,
+          "counterparty": "MERCH-DARAZ",
+          "status": "failed"
+        }
+      ]
+    },
+    {
+      "ticket_id": "PUB-002",
+      "complaint": "আমি ২০০ টাকা ভুল নাম্বারে পাঠিয়ে দিয়েছি। এখন কি করবো?",
+      "language": "bn",
+      "channel": "call_center",
+      "user_type": "customer",
+      "transaction_history": [
+        {
+          "transaction_id": "TXN-PUB-002",
+          "timestamp": "2026-06-01T09:22:11Z",
+          "type": "transfer",
+          "amount": 200,
+          "counterparty": "+8801623456789",
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "ticket_id": "PUB-003",
+      "complaint": "I deposited 5000 taka through an agent at the bKash booth but the amount is not showing in my account yet.",
+      "language": "en",
+      "channel": "field_agent",
+      "user_type": "customer",
+      "transaction_history": [
+        {
+          "transaction_id": "TXN-PUB-003",
+          "timestamp": "2026-06-15T13:45:30Z",
+          "type": "cash_in",
+          "amount": 5000,
+          "counterparty": "AGENT-RUHUL-9921",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "ticket_id": "PUB-004",
+      "complaint": "Someone called me saying they are from bKash and asked for my OTP to receive a cashback. I gave it. Now 15000 taka is missing from my wallet.",
+      "language": "en",
+      "channel": "call_center",
+      "user_type": "customer",
+      "transaction_history": [
+        {
+          "transaction_id": "TXN-PUB-004",
+          "timestamp": "2026-06-20T18:05:00Z",
+          "type": "transfer",
+          "amount": 15000,
+          "counterparty": "+8801999888777",
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "ticket_id": "PUB-005",
+      "complaint": "I made the same payment to Pathao twice by mistake. I want my money back for the duplicate transaction.",
+      "language": "en",
+      "channel": "in_app_chat",
+      "user_type": "customer",
+      "transaction_history": [
+        {
+          "transaction_id": "TXN-PUB-005-A",
+          "timestamp": "2026-06-22T20:11:00Z",
+          "type": "payment",
+          "amount": 320,
+          "counterparty": "MERCH-PATHAO",
+          "status": "completed"
+        },
+        {
+          "transaction_id": "TXN-PUB-005-B",
+          "timestamp": "2026-06-22T20:11:42Z",
+          "type": "payment",
+          "amount": 320,
+          "counterparty": "MERCH-PATHAO",
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "ticket_id": "PUB-006",
+      "complaint": "My merchant settlement for yesterday's sales has not been credited yet. Sales of 45000 taka are pending.",
+      "language": "en",
+      "channel": "merchant_portal",
+      "user_type": "merchant",
+      "transaction_history": [
+        {
+          "transaction_id": "TXN-PUB-006",
+          "timestamp": "2026-06-24T23:59:00Z",
+          "type": "settlement",
+          "amount": 45000,
+          "counterparty": "MERCH-CAFE-OWNER",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "ticket_id": "PUB-007",
+      "complaint": "Please process my refund of 850 taka for the cancelled order. Also my password is 1234 if needed.",
+      "language": "en",
+      "channel": "email",
+      "user_type": "customer",
+      "transaction_history": [
+        {
+          "transaction_id": "TXN-PUB-007",
+          "timestamp": "2026-06-23T16:30:00Z",
+          "type": "payment",
+          "amount": 850,
+          "counterparty": "MERCH-FOODPANDA",
+          "status": "reversed"
+        }
+      ]
+    }
+  ]
+}

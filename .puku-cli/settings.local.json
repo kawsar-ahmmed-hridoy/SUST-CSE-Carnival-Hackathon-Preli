@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(npx next:*)",
-      "Bash(npx jest:*)",
-      "Bash(LOG_LEVEL=error npx jest tests/integration/analyzeTicket.test.ts --no-coverage)"
-    ]
-  }
-}

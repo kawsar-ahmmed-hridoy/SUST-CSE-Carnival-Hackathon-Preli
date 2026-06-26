@@ -32,6 +32,7 @@ interface AppConfig {
   };
 
   security: {
+    apiKey: string | null;
     jwtSecret: string;
     jwtExpiresIn: string;
     refreshTokenSecret: string;
@@ -104,15 +105,22 @@ function loadConfig(): AppConfig {
       maxOutputTokens: 1024,
     },
     security: {
-      jwtSecret: getEnvString(
-        'JWT_SECRET',
-        nodeEnv === 'production' ? '' : 'dev_only_jwt_secret_minimum_32_characters_xx',
-      ),
+      apiKey: process.env.INTERNAL_API_KEY || null,
+      jwtSecret:
+        nodeEnv === 'test'
+          ? ''
+          : process.env.JWT_SECRET ||
+            (nodeEnv === 'production'
+              ? ''
+              : 'dev_only_jwt_secret_minimum_32_characters_xx'),
       jwtExpiresIn: process.env.JWT_EXPIRES_IN || '15m',
-      refreshTokenSecret: getEnvString(
-        'REFRESH_TOKEN_SECRET',
-        nodeEnv === 'production' ? '' : 'dev_only_refresh_secret_minimum_32_characters_yy',
-      ),
+      refreshTokenSecret:
+        nodeEnv === 'test'
+          ? ''
+          : process.env.REFRESH_TOKEN_SECRET ||
+            (nodeEnv === 'production'
+              ? ''
+              : 'dev_only_refresh_secret_minimum_32_characters_yy'),
       refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
     },
     rateLimit: {

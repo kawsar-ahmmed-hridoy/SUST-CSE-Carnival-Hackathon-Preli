@@ -47,9 +47,18 @@ export const PHISHING_KEYWORDS: RegExp[] = [
   /\bscam(?:mer|med)?\b/i,
   /\bsuspicious\s+(?:call|sms|link|message|email)\b/i,
   /\bshare\s+(?:my\s+)?(?:pin|otp|password|credentials)\b/i,
-  /\b(?:someone|a\s+person|an\s+agent)\s+(?:asked|told|requested)\s+(?:me\s+)?to\s+(?:share|give|send)\b/i,
+  /\b(?:someone|a\s+person|an\s+agent|customer\s+service|helpline|they)\s+(?:asked|told|requested|is\s+asking)\s+(?:me\s+)?(?:for|to\s+(?:share|give|send|provide))\b/i,
+  // Passive variant: "asked for my OTP", "asked for the password" (no "to share").
+  /\b(?:asked|told|requested)\s+(?:me\s+)?for\s+my\s+(?:pin|otp|password|credentials|cvv|one[-\s]?time\s+password)\b/i,
+  // OTP/credential mention combined with social-engineering verbs anywhere.
+  /\b(?:pin|otp|one[-\s]?time\s+password)\b[^.!?\n]{0,80}?\b(?:asked|told|requested|share|provide|give)\b/i,
   /\bfraud(?:ulent)?\b/i,
   /\bidentity\s+theft\b/i,
+  /\b(?:hacked|hack)\s+(?:my\s+)?(?:account|wallet|phone)\b/i,
+  /\b(?:my\s+)?(?:account|wallet)\s+(?:was|got|is)\s+hacked\b/i,
+  /\bunauthori[sz]ed\s+(?:transaction|transfer|access)\b/i,
+  /\blottery\b/i,
+  /\b(?:you've|you\s+have)\s+won\b/i,
 ];
 
 /** Reason codes used in responses. Kept here so they're uniform across services. */
