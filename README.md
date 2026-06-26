@@ -32,7 +32,7 @@ docker run -p 8000:8000 --env-file judging.env queuestorm-team
 Then verify with:
 
 ```bash
-curl http://localhost:8000/health
+curl https://sust-cse-carnival-hackathon-preli.onrender.com/health
 ```
 
 ### Datasets
@@ -52,6 +52,8 @@ bash scripts/run_evaluation.sh http://localhost:8000 ./evaluation/public_dataset
 | Role | Name |
 |---|---|
 | Backend / AI / DevOps | **Kawsar Ahmmed Hridoy** |
+| Backend / AI / | **Ashraful Islam** |
+| Project Structure | **Fowzia Fariha Shaj** |
 
 ---
 
@@ -294,7 +296,7 @@ docker run -d --rm -p 8000:8000 \
   --name queuestorm queuestorm-team
 
 # 3. Verify
-curl http://localhost:8000/health
+curl https://sust-cse-carnival-hackathon-preli.onrender.com/health
 ```
 
 ### Full docker-compose (service + MongoDB)

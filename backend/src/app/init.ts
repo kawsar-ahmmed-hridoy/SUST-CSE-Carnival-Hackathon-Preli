@@ -5,12 +5,18 @@
  * - Registers graceful shutdown handlers.
  *
  * In Next.js, this is invoked from `instrumentation.ts`.
+ *
+ * NOTE: We deliberately use RELATIVE imports here (not the `@/` alias) because
+ * this file is loaded via dynamic import from `instrumentation.ts`. The Next.js
+ * webpack build resolves relative paths reliably across all environments, while
+ * the `@/` alias occasionally fails for plain `.ts` modules (vs. route handlers
+ * under `src/app/.../route.ts`) on first-time container builds.
  */
 
-import config from '@/config';
-import { connectMongo, disconnectMongo } from '@/lib/mongodb';
-import { ensureIndexes } from '@/database/indexes';
-import logger from '@/utils/logger';
+import config from '../config';
+import { connectMongo, disconnectMongo } from '../lib/mongodb';
+import { ensureIndexes } from '../database/indexes';
+import logger from '../utils/logger';
 
 let initialized = false;
 
