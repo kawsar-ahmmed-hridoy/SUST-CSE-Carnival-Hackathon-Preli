@@ -1,0 +1,201 @@
+openapi: 3.1.0
+info:
+  title: QueueStorm Investigator API
+  version: 1.0.0
+  description: |
+    AI-powered support copilot that investigates customer complaints
+    for digital finance platforms.
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://api.example.com
+    description: Production
+tags:
+  - name: Health
+  - name: Tickets
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      description: Returns 200 if the service is running. No authentication.
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+  /analyze-ticket:
+    post:
+      tags: [Tickets]
+      summary: Analyze a customer support ticket
+      description: |
+        Cross-references the complaint text against the provided transaction
+        history and returns an evidence-grounded analysis with a safe customer
+        reply. Rate-limited per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketRequest'
+      responses:
+        '200':
+          description: Analysis complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeTicketResponse'
+        '400':
+          description: Malformed JSON or missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Valid schema but semantically invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    Transaction:
+      type: object
+      required: [transaction_id, timestamp, type, amount, counterparty, status]
+      properties:
+        transaction_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        type:
+          type: string
+          enum: [transfer, payment, cash_in, cash_out, settlement, refund]
+        amount: { type: number, format: float, minimum: 0 }
+        counterparty: { type: string }
+        status:
+          type: string
+          enum: [completed, failed, pending, reversed]
+    TicketRequest:
+      type: object
+      required: [ticket_id, complaint]
+      properties:
+        ticket_id: { type: string }
+        complaint: { type: string }
+        language:
+          type: string
+          enum: [en, bn, mixed]
+        channel:
+          type: string
+          enum: [in_app_chat, call_center, email, merchant_portal, field_agent]
+        user_type:
+          type: string
+          enum: [customer, merchant, agent, unknown]
+        campaign_context: { type: string }
+        transaction_history:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/Transaction' }
+        metadata:
+          type: object
+          additionalProperties: true
+    AnalyzeTicketResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: { $ref: '#/components/schemas/TicketResponse' }
+    TicketResponse:
+      type: object
+      required:
+        - ticket_id
+        - relevant_transaction_id
+        - evidence_verdict
+        - case_type
+        - severity
+        - department
+        - agent_summary
+        - recommended_next_action
+        - customer_reply
+        - human_review_required
+        - confidence
+        - reason_codes
+      properties:
+        ticket_id: { type: string }
+        relevant_transaction_id:
+          type: string
+          nullable: true
+        evidence_verdict:
+          type: string
+          enum: [consistent, inconsistent, insufficient_data]
+        case_type:
+          type: string
+          enum:
+            [
+              wrong_transfer,
+              payment_failed,
+              refund_request,
+              duplicate_payment,
+              merchant_settlement_delay,
+              agent_cash_in_issue,
+              phishing_or_social_engineering,
+              other,
+            ]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        department:
+          type: string
+          enum:
+            [
+              customer_support,
+              dispute_resolution,
+              payments_ops,
+              merchant_operations,
+              agent_operations,
+              fraud_risk,
+            ]
+        agent_summary: { type: string }
+        recommended_next_action: { type: string }
+        customer_reply: { type: string }
+        human_review_required: { type: boolean }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        reason_codes:
+          type: array
+          items: { type: string }
+    ErrorResponse:
+      type: object
+      required: [success, message, statusCode]
+      properties:
+        success: { type: boolean, enum: [false] }
+        message: { type: string }
+        error: { type: string }
+        statusCode: { type: integer }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              message: { type: string }
